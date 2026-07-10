@@ -8,9 +8,17 @@ while ($true) {
     Write-Host ""
 
     $piConnected = $false
+    $statusFresh = $false
     if (Test-Path $HeartbeatFile) {
         $age = (Get-Date) - (Get-Item $HeartbeatFile).LastWriteTime
-        $piConnected = $age.TotalSeconds -le 10
+        $piConnected = $age.TotalSeconds -le 30
+    }
+    if (Test-Path $StatusFile) {
+        $statusAge = (Get-Date) - (Get-Item $StatusFile).LastWriteTime
+        $statusFresh = $statusAge.TotalSeconds -le 30
+    }
+    if ($statusFresh) {
+        $piConnected = $true
     }
     if ($piConnected) {
         Write-Host "Raspberry Pi: CONNECTED" -ForegroundColor Green
