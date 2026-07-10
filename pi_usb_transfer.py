@@ -111,22 +111,34 @@ def usb_volumes(config):
     return volumes
 
 
-def same_file(source, destination):
+def same_file(source, destination, progress_callback=None):
     try:
         source_stat = source.stat()
         dest_stat = destination.stat()
         if source_stat.st_size != dest_stat.st_size:
             return False
-        return file_hash(source) == file_hash(destination)
+        source_hash = file_hash(source, progress_callback)
+        dest_hash = file_hash(destination, progress_callback)
+        return source_hash == dest_hash
     except OSError:
         return False
 
 
-def file_hash(path):
+def file_hash(path, progress_callback=None):
     digest = hashlib.sha256()
+    done = 0
+    last_update = 0
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
+            done += len(block)
+            if progress_callback:
+                now = time.monotonic()
+                if now - last_update >= 1:
+                    progress_callback(path, done)
+                    last_update = now
+    if progress_callback:
+        progress_callback(path, done)
     return digest.digest()
 
 
@@ -268,7 +280,29 @@ def copy_one(source, destination, destination_config, display, sent_before, tota
         partial.replace(destination)
         # Read the file back through SMB. Success means source and receiver
         # contain exactly the same bytes, not merely the same filename/size.
-        if file_hash(source) != file_hash(destination):
+        sent = sent_before + size
+        remaining = max(0, total_bytes - sent)
+        percent = sent * 100 / max(total_bytes, 1)
+
+        def verifying_status(_path, _done):
+            display.show(
+                "VERIFYING",
+                source.name,
+                f"Left {data_size(remaining)}",
+                sent / max(total_bytes, 1),
+            )
+            write_status(
+                destination_config["mount_point"],
+                destination_config["name"],
+                "VERIFYING",
+                source.name,
+                sent,
+                remaining,
+                percent,
+            )
+
+        verifying_status(source, 0)
+        if file_hash(source, verifying_status) != file_hash(destination, verifying_status):
             destination.unlink(missing_ok=True)
             raise IOError(f"SHA-256 verification failed for {source.name}")
     except Exception:
@@ -284,9 +318,50 @@ def transfer_volume(volume, destination_config, batch_name, display):
     skipped_bytes = 0
     for source in files:
         destination = destination_root / source.relative_to(volume)
-        if same_file(source, destination):
+        if destination.exists():
+            display.show(
+                "VERIFY EXISTING",
+                source.name,
+                "Checking receiver",
+            )
+            write_status(
+                destination_config["mount_point"],
+                destination_config["name"],
+                "VERIFYING EXISTING FILE",
+                source.name,
+                sent=skipped_bytes,
+                remaining=0,
+                percent=0,
+            )
+
+        def existing_status(_path, _done):
+            write_status(
+                destination_config["mount_point"],
+                destination_config["name"],
+                "VERIFYING EXISTING FILE",
+                source.name,
+                sent=skipped_bytes,
+                remaining=0,
+                percent=0,
+            )
+
+        if same_file(source, destination, existing_status):
             skipped += 1
             skipped_bytes += source.stat().st_size
+            display.show(
+                "SKIPPING",
+                source.name,
+                "Already verified",
+            )
+            write_status(
+                destination_config["mount_point"],
+                destination_config["name"],
+                "SKIPPING - ALREADY EXISTS",
+                source.name,
+                sent=skipped_bytes,
+                remaining=0,
+                percent=100,
+            )
         else:
             pending.append((source, destination))
 
