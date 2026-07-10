@@ -1,0 +1,15 @@
+[Unit]
+Description=USB to SMB file transfer with OLED status
+After=network-online.target remote-fs-pre.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pi-usb-transfer/venv/bin/python /opt/pi-usb-transfer/pi_usb_transfer.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

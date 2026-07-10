@@ -1,0 +1,29 @@
+{
+  "destinations": [
+    {
+      "name": "PC",
+      "share": "//192.168.1.50/PiDrop",
+      "username": "windows-user",
+      "password": "change-me",
+      "domain": "",
+      "mount_point": "/mnt/pi-receiver-pc"
+    },
+    {
+      "name": "MAC",
+      "share": "//192.168.1.51/PiDrop",
+      "username": "mac-user",
+      "password": "change-me",
+      "domain": "",
+      "mount_point": "/mnt/pi-receiver-mac"
+    }
+  ],
+  "usb_roots": ["/media/pi", "/run/media/pi"],
+  "poll_seconds": 3,
+  "oled": {
+    "enabled": true,
+    "i2c_address": "0x3C",
+    "width": 128,
+    "height": 64,
+    "rotate": 0
+  }
+}
