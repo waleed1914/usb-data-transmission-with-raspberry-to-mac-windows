@@ -27,10 +27,18 @@ class StatusDisplay:
         try:
             from luma.core.interface.serial import i2c
             from luma.core.render import canvas
-            from luma.oled.device import sh1106
+            from luma.oled.device import sh1106, ssd1306
 
             address = int(str(config.get("i2c_address", "0x3C")), 0)
-            self.device = sh1106(
+            driver_name = str(config.get("driver", "sh1106")).lower()
+            drivers = {
+                "sh1106": sh1106,
+                "ssd1306": ssd1306,
+            }
+            driver = drivers.get(driver_name)
+            if not driver:
+                raise ValueError(f"Unsupported OLED driver '{driver_name}'")
+            self.device = driver(
                 i2c(port=1, address=address),
                 width=int(config.get("width", 128)),
                 height=int(config.get("height", 64)),
@@ -44,14 +52,21 @@ class StatusDisplay:
         LOG.info("%s | %s | %s", title, line1, line2)
         if not self.device:
             return
-        with self.canvas(self.device) as draw:
-            draw.text((0, 0), str(title)[:21], fill="white")
-            draw.text((0, 16), str(line1)[:21], fill="white")
-            draw.text((0, 30), str(line2)[:21], fill="white")
-            if progress is not None:
-                value = max(0.0, min(1.0, progress))
-                draw.rectangle((0, 51, 127, 62), outline="white")
-                draw.rectangle((2, 53, 2 + int(123 * value), 60), fill="white")
+        try:
+            with self.canvas(self.device) as draw:
+                draw.text((0, 0), str(title)[:21], fill="white")
+                draw.text((0, 16), str(line1)[:21], fill="white")
+                draw.text((0, 30), str(line2)[:21], fill="white")
+                if progress is not None:
+                    value = max(0.0, min(1.0, progress))
+                    draw.rectangle((0, 51, 127, 62), outline="white")
+                    draw.rectangle((2, 53, 2 + int(123 * value), 60), fill="white")
+        except OSError as exc:
+            LOG.warning("OLED write failed; disabling OLED until service restart: %s", exc)
+            self.device = None
+        except Exception as exc:
+            LOG.warning("OLED update failed; disabling OLED until service restart: %s", exc)
+            self.device = None
 
 
 def load_config():

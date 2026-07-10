@@ -21,6 +21,7 @@
   "poll_seconds": 3,
   "oled": {
     "enabled": true,
+    "driver": "sh1106",
     "i2c_address": "0x3C",
     "width": 128,
     "height": 64,
